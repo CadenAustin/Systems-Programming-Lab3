@@ -1,0 +1,59 @@
+#!/bin/bash
+
+if [[ $# != 1 ]]; then
+    echo "Usage program-processes-info PROGRAM_NAME"
+    exit 1
+fi
+
+progname=$1
+
+# Need lsof, so see if installed and correct path:
+if which lsof &>/dev/null; then
+    lsofpath=$(which lsof)
+elif which /sbin/lsof &>/dev/null; then
+    lsofpath=/sbin/lsof
+elif which /usr/sbin/lsof &>/dev/null; then
+    lsofpath=/usr/sbin/lsof
+else
+    echo "Command lsof is required, but cannot found, please install!"
+    exit 1
+fi
+
+
+
+# Parameters: (1) top-level PID
+function get_descendents()
+{
+    local descendents=
+
+    for pid in $(pgrep -P $1); do
+        descendents="$descendents $pid"
+        pid_descendents=$(get_descendents $pid)
+        if [[ -n "$pid_descendents" ]]; then
+            descendents="$descendents $pid_descendents"
+        fi
+    done
+
+    echo $descendents
+}
+
+
+
+process=$(ps -C "$progname" -o pid= | head -n1)
+if [[ -z $process ]]; then
+    echo "No process found for PROGRAM_NAME: $progname"
+    exit 1
+fi
+
+descendents_pids=$(get_descendents $process)
+echo "Program \"$progname\" processes and threads:"
+ps -L -o pid,tid,ppid,stat,comm $process $descendents_pids
+
+for p in $process $descendents_pids; do
+    echo; echo "PID $p open files:"
+    $lsofpath -a -R -d '^cwd,^txt,^mem,^rtd' -p $p
+done
+
+exit
+
+#EOF

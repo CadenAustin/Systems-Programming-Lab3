@@ -1,0 +1,41 @@
+#!/bin/bash
+
+# Set loop interval (in seconds):
+interval=1
+
+if [[ $# != 1 ]]; then
+    echo "Usage: check-processes PROGRAM_NAME" >&2
+    exit 1
+fi
+
+
+function get_descendents()
+{
+    local descendents=
+
+    for pid in $(pgrep -P "$1"); do
+        descendents="$descendents $pid"
+        pid_descendents=$(get_descendents $pid)
+        if [[ -n "$pid_descendents" ]]; then
+            descendents="$descendents $pid_descendents"
+        fi
+    done
+
+    echo $descendents
+}
+
+
+while true; do
+    if process=$(ps -o pid= -C "$1"); then
+        ps -o pid,ppid,args $process $(get_descendents $process)
+    else
+        echo "(none!)"
+    fi
+    echo
+
+    sleep $interval
+done
+
+exit 0
+
+# EOF
