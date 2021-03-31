@@ -7,6 +7,13 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
+typedef struct{
+    int free;
+    pid_t processID;
+    int pipeFDS[2];
+    char *fileName;
+} PipeDictionary;
+
 void print_usage();
 pid_t run_command_in_subprocess(char *file, char *command[], int fileIndex, int writeFD);
 int printout_terminated_subprocess(int status, PipeDictionary *dictionaryItem, int *errorInRun);
@@ -15,13 +22,6 @@ int get_free_pipe(PipeDictionary *pipeManagment, int size);
 int all_pipes_accounted(PipeDictionary *pipeManagment, int size);
 int match_pid_with_struct(PipeDictionary pipeManagment[], int size, pid_t searchPID);
 
-
-typedef struct{
-    int free;
-    pid_t processID;
-    int pipeFDS[2];
-    char *fileName;
-} PipeDictionary;
 
 void print_usage(){
     fprintf(stderr, "Usage: runpar NUMCORES COMMAND... _files_ FILE...\n");
@@ -57,6 +57,7 @@ int printout_terminated_subprocess(int status, PipeDictionary *dictionaryItem, i
     
     int readStatus = read(readPipe, buffer, 4096);
     if (readStatus >= 0){
+        buffer[readStatus] = "\0";
         printf("%s\n", buffer);
     } else if (errno == EAGAIN){
         printf("Child has no output\n");
@@ -139,14 +140,15 @@ int main(int argc, char *argv[]){
 
 
     for (int fileIndex = argIndex+1; fileIndex < argc; fileIndex++){
-        
         int dictIndex = get_free_pipe(pipeManagment, numberOfCores);
     
         if (dictIndex == -1){
             pid_t finishedProcess = wait(&status);
             int dictIndex = match_pid_with_struct(pipeManagment, numberOfCores, finishedProcess);
             printout_terminated_subprocess(status, &pipeManagment[dictIndex], &errorInRun);
+            printf("Testing\n");
         }
+
         pipe(pipeManagment[dictIndex].pipeFDS);
         pipeManagment[dictIndex].free = 1;
          
