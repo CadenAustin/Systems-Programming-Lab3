@@ -167,12 +167,15 @@ int main(int argc, char *argv[]){
         }
         
         pipe(pipeManagment[dictIndex].pipeFDS); //Generate pipe 
-        pipeManagment[dictIndex].free = 1; //Unfree pipeset
          
         pid_t currentWorkingPID = run_command_in_subprocess(argv[fileIndex], command, commandIndex, pipeManagment[dictIndex].pipeFDS[1]); //Run subprocess command
         if (currentWorkingPID == 0){
-            return EXIT_FAILURE;
+            errorInRun++; //could use exit but don't want to leave orphans
+            close(pipeManagment[dictIndex].pipeFDS[0]);
+            close(pipeManagment[dictIndex].pipeFDS[1]);
+            continue;
         }
+        pipeManagment[dictIndex].free = 1; //Unfree pipeset
         pipeManagment[dictIndex].processID = currentWorkingPID; //Add process ID to pipeset
         pipeManagment[dictIndex].fileName = argv[fileIndex]; //Add file name to pipeset for easy use
     }
