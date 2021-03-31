@@ -7,6 +7,15 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
+void print_usage();
+pid_t run_command_in_subprocess(char *file, char *command[], int fileIndex, int writeFD);
+int printout_terminated_subprocess(int status, PipeDictionary *dictionaryItem, int *errorInRun);
+void print_header(char *name);
+int get_free_pipe(PipeDictionary *pipeManagment, int size);
+int all_pipes_accounted(PipeDictionary *pipeManagment, int size);
+int match_pid_with_struct(PipeDictionary pipeManagment[], int size, pid_t searchPID);
+
+
 typedef struct{
     int free;
     pid_t processID;
