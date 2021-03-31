@@ -39,17 +39,31 @@ pid_t run_command_in_subprocess(char *file, char *command[], int fileIndex, int 
 
 int printout_terminated_subprocess(int status, PipeDictionary *dictionaryItem, int *errorInRun){ 
     if (WEXITSTATUS(status) == EXIT_FAILURE){
-        errorInRun++;
+        (*errorInRun)++;
+        return -1;
+    }
+   
+    int readPipe = dictionaryItem->pipeFDS[0];
+    char buffer[4092];
+    
+    int readStatus = read(readPipe, buffer, 4096);
+    if (readStatus >= 0){
+        printf("%s\n", buffer);
+    } else if (errno == EAGAIN){
+        printf("Child has no output\n");
+    } else {
+        fprintf(stderr, "Error Reading from pipe for file: %s\n", (dictionaryItem->fileName));
         return -1;
     }
 
-   return 0;
+    dictionaryItem->free = 0;
+    return 0;
 }
 
 void print_header(char *name){
-    printf("____________________");
-    printf("Output from: %s", name);
-    printf("--------------------");
+    printf("____________________\n");
+    printf("Output from: %s\n", name);
+    printf("--------------------\n");
     return;
 }
 
@@ -71,8 +85,10 @@ int all_pipes_accounted(PipeDictionary *pipeManagment, int size){
     return 0;
 }
 
-int match_pid_with_struct(PipeDictionary *pipeManagment, int size, pid_t searchPID){
+int match_pid_with_struct(PipeDictionary pipeManagment[], int size, pid_t searchPID){
     for (int x = 0; x < size; x++){
+        printf("%d\n", pipeManagment[x].processID);
+        printf("%d\n", searchPID);
         if (pipeManagment[x].processID == searchPID){
             return x; 
         }
@@ -81,6 +97,7 @@ int match_pid_with_struct(PipeDictionary *pipeManagment, int size, pid_t searchP
 }
 
 int main(int argc, char *argv[]){
+    
     char *command[argc];
     int status, errorInRun = 0, commandIndex = 0, argIndex = 1, numberOfCores = 0;
 
@@ -117,24 +134,26 @@ int main(int argc, char *argv[]){
         int dictIndex = get_free_pipe(pipeManagment, numberOfCores);
     
         if (dictIndex == -1){
-            //Wait
+            pid_t finishedProcess = wait(&status);
+            int dictIndex = match_pid_with_struct(pipeManagment, numberOfCores, finishedProcess);
+            printout_terminated_subprocess(status, &pipeManagment[dictIndex], &errorInRun);
         }
-        PipeDictionary workingDict = pipeManagment[dictIndex];
-        pipe(workingDict.pipeFDS);
-        workingDict.free = 1;
+        pipe(pipeManagment[dictIndex].pipeFDS);
+        pipeManagment[dictIndex].free = 1;
          
-        pid_t currentWorkingPID = run_command_in_subprocess(argv[fileIndex], command, commandIndex, workingDict.pipeFDS[1]);
+        pid_t currentWorkingPID = run_command_in_subprocess(argv[fileIndex], command, commandIndex, pipeManagment[dictIndex].pipeFDS[1]);
         if (currentWorkingPID == 0){
             exit(EXIT_FAILURE);
         }
-        workingDict.processID = currentWorkingPID; 
-        workingDict.fileName = argv[fileIndex];
+        pipeManagment[dictIndex].processID = currentWorkingPID; 
+        pipeManagment[dictIndex].fileName = argv[fileIndex];
     }
 
-    while (all_pipes_accounted(pipeManagment, numberOfCores) != -1){
+    while (all_pipes_accounted(pipeManagment, numberOfCores) == -1){
         pid_t finishedProcess = wait(&status);
         int dictIndex = match_pid_with_struct(pipeManagment, numberOfCores, finishedProcess);
         printout_terminated_subprocess(status, &pipeManagment[dictIndex], &errorInRun);
+        printf("%d %d\n", pipeManagment[dictIndex].free, errorInRun);
         break;
     } 
     
